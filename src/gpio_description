@@ -1,0 +1,46 @@
+# Raspberry PI GPIO XBMC Controller configuration file
+# Ip address of the XBMC machine
+[ip]:localhost
+
+# Radio volume and XBMC volume are unified
+unified_volume:1
+
+# Debouncing settings
+click_skip:1
+click_hold:500000
+encoder_hold:200000
+
+# Left Control
+button:10:system_mode_toggle
+encoder:sl:2:sr:2:clk:11:dt:9:volume_minus:volume_plus
+
+# Right Control
+encoder:sl:2:sr:2:clk:22:dt:27:radio_seek_down+xbmcbuiltin_PlayerControl(previous):radio_seek_up+xbmcbuiltin_PlayerControl(next)
+button:17:xbmcbuiltin_Fullscreen
+
+################################################################################
+#########################  CLARIFICATION ON SETTINGS  ##########################
+################################################################################
+# 1. Debouncing Common Settings
+# click_skip - How many button press events will be ignored until the user takes the finger out of the button
+# click_hold - Ho many microseconds to hold after a button was pressed
+# encoder_hold - How many microseconds to hold after an encoder has been turn
+
+# 2. Encoder settings
+# sl: How many times to skip an action for the left turn of the encoder
+# sr: How many times to skip an action for the right turn of the encoder
+# clk: The GPIO number where the CLK pin of the encoder is hooked up
+# dt: The GPIO number where the DT pin of the encoder is hooked up
+
+# 3. Radio Commands
+# A radio module is needed and a radio UDP server runing.
+# A Radio command should start with radio_ and one of the following commands:
+#     seek_up       -> seek for the next channel
+#     seek_down     -> seek for the previous channel
+#     tune_right    -> tune one step right
+#     tune_left     -> tune one step left
+#     tune_xx.x     -> set radio to the xx.x frequency
+#     volume_plus   -> increase radio volume by 1
+#     volume_minus  -> decrease radio volume by 1
+#     volume_xx     -> set the radio volume to xx
+#     toggle_mute   -> toggle radio mute
