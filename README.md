@@ -4,8 +4,8 @@ This is a Raspberry PI GPIO controller responsible for handling all GPIO events.
 
 ## Supported devices
 <ul>
-<li>SI4703 I2C FM radio module</li>
-<li>Rotary encoders</li>
+<li><a href="http://www.ebay.com/sch/i.html?_odkw=rotary+encoder&_from=R40&_osacat=0&_from=R40&_trksid=p2045573.m570.l1313.TR0.TRC0.H0.Xsi4703.TRS0&_nkw=si4703&_sacat=0">SI4703 I2C FM radio module</a></li>
+<li><a href="http://www.ebay.com/sch/i.html?_from=R40&_trksid=p2050601.m570.l1313.TR0.TRC0.H0.Xrotary+encoder.TRS0&_nkw=rotary+encoder&_sacat=0">Rotary encoders</a></li>
 <li>Push buttons</li>
 </ul>
 
