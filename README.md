@@ -3,9 +3,11 @@ Raspberry PI controller<br>
 This is a Raspberry PI GPIO controller responsible for handling all GPIO events. 
 
 ## Supported devices
+<ul>
 <li>SI4703 I2C FM radio module</li>
 <li>Rotary encoders</li>
 <li>Push buttons</li>
+</ul>
 
 ## Usage & Configuration
 Check the src/gpio_description file.
