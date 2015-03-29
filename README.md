@@ -1,14 +1,14 @@
 ## Description
-Raspberry PI controller
+Raspberry PI controller<br>
 This is a Raspberry PI GPIO controller responsible for handling all GPIO events. 
 
 ## Supported devices
-SI4703 I2C FM radio module
-Rotary encoders
-Push buttons
+<li>SI4703 I2C FM radio module</li>
+<li>Rotary encoders</li>
+<li>Push buttons</li>
 
 ## Usage & Configuration
-Check the src/gpio_description file
+Check the src/gpio_description file.
 
 
 http://engineeringdiy.freeforums.org/<br>
