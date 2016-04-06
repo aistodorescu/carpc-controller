@@ -9,7 +9,8 @@ This is a Raspberry PI GPIO controller responsible for handling all GPIO events.
 </ul>
 
 ## Usage & Configuration
-Check the src/gpio_description file.
+./carpc-controller gpio_description
+Check io_config file.
 
 
 
