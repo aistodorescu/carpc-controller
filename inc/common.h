@@ -2,7 +2,7 @@
 #define _COMMON_H_
 
 #include "config.h"
-#include <rpc/types.h>
+//#include <rpc/types.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -41,6 +41,18 @@ typedef unsigned long int   uint64_t;
 #else
 __extension__
 typedef unsigned long long int  uint64_t;
+#endif
+
+#ifndef bool_t
+#   define bool_t uint8_t
+#endif
+
+#ifndef TRUE
+#   define TRUE     1
+#endif
+
+#ifndef FALSE
+#   define FALSE    0
 #endif
 
 /*
