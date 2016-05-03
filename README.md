@@ -9,7 +9,7 @@ This is a Raspberry PI GPIO controller responsible for handling all GPIO events.
 </ul>
 
 ## Usage & Configuration
-put <a href="https://github.com/xbmc/xbmc/blob/master/tools/EventClients/lib/python/xbmcclient.py">xbmcclient.h</a> in inc folder<br />
+Copy <a href="https://github.com/xbmc/xbmc/blob/master/tools/EventClients/lib/python/xbmcclient.py">xbmcclient.h</a> inside inc folder before building<br />
 ./carpc-controller io_config<br />
 Check io_config file.
 
