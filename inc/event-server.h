@@ -1,8 +1,9 @@
 #ifndef _EVENT_SERVER_H_
 #define _EVENT_SERVER_H_
 
+#include "settings.h"
 
-extern void EventServer_Init();
+extern void EventServer_Init(settings_t *pSettings);
 extern void EventServer_UnInit();
 
 /* Not the best module for the following functions */

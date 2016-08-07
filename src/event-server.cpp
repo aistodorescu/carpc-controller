@@ -19,7 +19,7 @@
 /*
  * Defines
  */
-#define INPUT_BUFFER_SIZE   (40)
+#define INPUT_BUFFER_SIZE   (140)
 
 /*
  * Typedefs
@@ -33,20 +33,23 @@ static void *EventServer_Loop(void *pParam);
 /*
  * Local Variables
  */
-static pthread_t        mEventServerThread;
-static int              sockEventServer;
-uint8_t                 xbmcVol = XBMC_START_VOL;
-extern uint8_t          gSystemMode;
-static bool_t           mForceStop = FALSE;
-static uint8_t          mVolumeLookup[16];
+static settings_t   *mpSettings = NULL;
+static pthread_t    mEventServerThread;
+static int          sockEventServer;
+uint8_t             xbmcVol = XBMC_START_VOL;
+static bool_t       mForceStop = FALSE;
+static uint8_t      mVolumeLookup[16];
+
 /*
  * Public functions definitions
  */
-void EventServer_Init()
+void EventServer_Init(settings_t *pSettings)
 {
     int err;
     struct sockaddr_in sockAddr;
     uint8_t idx;
+
+    mpSettings = pSettings;
 
     for(idx=0;idx<16;idx++)
     {
@@ -64,9 +67,15 @@ void EventServer_Init()
     if(err)
     {
         perror("setsockopt");
-        print("Bind error\n");
+        printf("Bind error\n");
         exit(1);
     }
+
+    sockAddr.sin_family = AF_INET;
+    sockAddr.sin_port = htons(5010);
+    inet_pton(AF_INET, "127.0.0.1", &(sockAddr.sin_addr));
+    sendto(sockEventServer, "GET_CONFIG\0", sizeof("GET_CONFIG\0"), 0,
+        (struct sockaddr*)&sockAddr, sizeof sockAddr);
 
     /* Create new thread */
     pthread_create(&mEventServerThread, NULL, EventServer_Loop, NULL);
@@ -115,36 +124,36 @@ void System_VolumeUpdate(char *pComm)
     /* Get radio volume */
     radioVol = si_get_volume();
     (void)radioVol;
-    print("---------------------%d %d\n", radioVol, xbmcVol);
+    printf("---------------------%d %d\n", radioVol, xbmcVol);
 
 
     /* Increase xbmc volume */
     if(strstr(pComm, "plus") && (xbmcVol < 100 - XBMC_VOL_INC))
     {
-        print("plus---------------------%d %d\n", radioVol, xbmcVol);
+        printf("plus---------------------%d %d\n", radioVol, xbmcVol);
         xbmcVol += XBMC_VOL_INC;
     }
     /* Decrease xbmc volume */
     else if(strstr(pComm, "minus") && (xbmcVol > 0 + XBMC_VOL_INC))
     {
-        print("minus---------------------%d %d\n", radioVol, xbmcVol);
+        printf("minus---------------------%d %d\n", radioVol, xbmcVol);
         xbmcVol -= XBMC_VOL_INC;
     }
 
     /* Set volume in XBMC */
-    print("---------------------%d %d\n", radioVol, xbmcVol);
+    printf("---------------------%d %d\n", radioVol, xbmcVol);
     memset(pData, 0, ACTION_MAX_SIZE);
     sprintf(pData, "SetVolume(%d,1)", xbmcVol);
-    print("xbmc command: %s\n+++++++++++++\n", pData);
+    printf("xbmc command: %s\n+++++++++++++\n", pData);
     XBMC_ClientAction(pData);
 
-    if(gSystemMode == gModeRadio_c)
+    if(mpSettings->systemMode == gModeRadio_c)
     {
         for(idx=0;idx<16;idx++)
         {
             if(xbmcVol - mVolumeLookup[idx] < (int)(100 / 16))
             {
-                print("Set volume to %d\n", idx);
+                printf("Set volume to %d\n", idx);
                 si_set_volume(idx);
                 break;
             }

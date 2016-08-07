@@ -10,9 +10,11 @@
 
 #include "wiringPi.h"
 
+#include "events.h"
 #include "config.h"
 #include "common.h"
 #include "commands.h"
+#include "settings.h"
 
 /*
  * Defines
@@ -27,11 +29,11 @@ static void ISR##pin##_Handler(void) \
         int res;\
         char event;\
         event = pin;\
-        print("----------------%d\n", pin);\
+        printf("----------------%d\n", pin);\
         res = mq_send(mEventsMessageQueueFd, (char*)&event, sizeof(event), 1);\
         if(res < 0)\
         {\
-            print("error fd %d\n", mEventsMessageQueueFd);\
+            printf("error fd %d\n", mEventsMessageQueueFd);\
         }\
     }\
 }
@@ -39,7 +41,7 @@ static void ISR##pin##_Handler(void) \
 /*
  * Typedefs
  */
-typedef void(*isrFp_t)(void);
+
 
 /*
  * Private Functions Prototypes
@@ -62,25 +64,19 @@ static struct mq_attr   mEventsMessageQueueBuf;
 static bool_t           mForceStop = FALSE;
 static bool_t           mAllowEvent = TRUE;
 
-ISR(0);ISR(1);ISR(2);ISR(3);ISR(4);ISR(5);ISR(6);ISR(7);ISR(8);ISR(9);ISR(10);ISR(11);ISR(12);
-ISR(13);ISR(14);ISR(15);ISR(16);ISR(17);ISR(18);ISR(19);ISR(20);ISR(21);ISR(22);ISR(23);ISR(24);
-ISR(25);ISR(26);ISR(27);
-static isrFp_t aSupportedIsrHandlers[] =
+ISR(0); ISR(1); ISR(2); ISR(3); ISR(4); ISR(5); ISR(6); ISR(7); ISR(8); ISR(9);
+ISR(10); ISR(11); ISR(12); ISR(13); ISR(14); ISR(15); ISR(16); ISR(17); ISR(18);
+ISR(19);ISR(20);ISR(21);ISR(22);ISR(23);ISR(24); ISR(25);ISR(26);ISR(27);
+static evIsrFp_t aSupportedIsrHandlers[] =
 {
-    ISR0_Handler, ISR1_Handler, ISR2_Handler, ISR3_Handler, ISR4_Handler, ISR5_Handler,
-    ISR6_Handler, ISR7_Handler, ISR8_Handler, ISR9_Handler, ISR10_Handler, ISR11_Handler,
-    ISR12_Handler, ISR13_Handler, ISR14_Handler, ISR15_Handler, ISR16_Handler, ISR17_Handler,
-    ISR18_Handler, ISR19_Handler, ISR20_Handler, ISR21_Handler, ISR22_Handler, ISR23_Handler,
+    ISR0_Handler, ISR1_Handler, ISR2_Handler, ISR3_Handler, ISR4_Handler,
+    ISR5_Handler, ISR6_Handler, ISR7_Handler, ISR8_Handler, ISR9_Handler,
+    ISR10_Handler, ISR11_Handler, ISR12_Handler, ISR13_Handler, ISR14_Handler,
+    ISR15_Handler, ISR16_Handler, ISR17_Handler, ISR18_Handler, ISR19_Handler,
+    ISR20_Handler, ISR21_Handler, ISR22_Handler, ISR23_Handler,
     ISR24_Handler, ISR25_Handler, ISR26_Handler, ISR27_Handler
 };
-
-static uint8_t          mClickSkip = 7;
-static uint32_t         mClickHold = 10000;
-static uint32_t         mEncoderHold = 10000;
-static button_t         mButtons[BUTTONS_NB];
-static uint8_t          mButtonsNb = 0;
-static encoder_t        mEncoders[ENCODERS_NB];
-static uint8_t          mEncodersNb = 0;
+static settings_t *mpSettings = NULL;
 
 /*
  * Global Variables
@@ -92,23 +88,43 @@ static uint8_t          mEncodersNb = 0;
  */
 static void ISR_RDS_Handler(void)
 {
-    print("----------------RDS----------------\n");
+    printf("----------------RDS----------------\n");
     Commands_Signal((char*)"interrupt_rds");
 }
 
-void Events_Init(const char *pFileName)
+void Events_Init(settings_t *pSettings)
 {
-    print("Starting Events Module\n");
+    uint8_t idx = 0;
 
-    /* Init configuration for events */
-    memset(mEncoders, 0, sizeof(encoder_t) * ENCODERS_NB);
-    memset(mButtons, 0, sizeof(button_t) * BUTTONS_NB);
-    Events_ReadConfig(pFileName);
+    printf("Starting Events Module\n");
+
+    /* Update buttons handlers */
+    for(idx=0;idx<pSettings->buttonsNb;idx++)
+    {
+        printf("button: %d\n", pSettings->buttons[idx].gpio);
+        pinMode(pSettings->buttons[idx].gpio, INPUT);
+        wiringPiISR(pSettings->buttons[idx].gpio, INT_EDGE_FALLING,
+            aSupportedIsrHandlers[pSettings->buttons[idx].gpio]);
+    }
+
+    for(idx=0;idx<pSettings->encodersNb;idx++)
+    {
+        printf("clk: %d\n", pSettings->encoders[idx].gpioClk);
+        pinMode(pSettings->encoders[idx].gpioClk, INPUT);
+        wiringPiISR(pSettings->encoders[idx].gpioClk, INT_EDGE_BOTH,
+        aSupportedIsrHandlers[pSettings->encoders[idx].gpioClk]);
+
+        printf("dt: %d\n", pSettings->encoders[idx].gpioDt);
+        pinMode(pSettings->encoders[idx].gpioDt, INPUT);
+        wiringPiISR(pSettings->encoders[idx].gpioDt, INT_EDGE_BOTH,
+        aSupportedIsrHandlers[pSettings->encoders[idx].gpioDt]);
+    }
 
     /* Create message queue */
     mEventsMessageQueueBuf.mq_msgsize = 512;
     mEventsMessageQueueBuf.mq_maxmsg = 32;
-    mEventsMessageQueueFd = mq_open("/QCarPcEvents", O_CREAT | O_RDWR, 600, &mEventsMessageQueueBuf);
+    mEventsMessageQueueFd = mq_open("/QCarPcEvents", O_CREAT | O_RDWR, 600,
+        &mEventsMessageQueueBuf);
 
     if(mEventsMessageQueueFd < 0)
     {
@@ -116,7 +132,9 @@ void Events_Init(const char *pFileName)
     }
     else
     {
-        print("init ok %d\n", mEventsMessageQueueFd);
+        printf("init ok %d\n", mEventsMessageQueueFd);
+
+        mpSettings = pSettings;
 
         pinMode(25, INPUT);
         wiringPiISR(25, INT_EDGE_BOTH, ISR_RDS_Handler);
@@ -132,6 +150,10 @@ void Events_UnInit()
     mq_close(mEventsMessageQueueFd);
 }
 
+evIsrFp_t *Events_GetHandlers()
+{
+	return aSupportedIsrHandlers;
+}
 
 /*
  * Private Functions Definitions
@@ -151,7 +173,7 @@ static void *Events_ProcessLoop(void *pParam)
         {
             bool_t executed;
 
-            //print("%d received\n", event);
+            //printf("%d received\n", event);
             executed = Events_ProcessButton(event);
             if(!executed)
             {
@@ -180,7 +202,7 @@ static void *Events_ProcessLoop(void *pParam)
         }
         else if(ret < 0)
         {
-            print("received: %d\n", ret);
+            printf("received: %d\n", ret);
         }
     }
     pthread_exit(NULL);
@@ -206,25 +228,25 @@ bool_t Events_ProcessButton(char gpio)
     uint8_t i;
     bool_t res = FALSE;
 
-    for(i=0;i<mButtonsNb;i++)
+    for(i=0;i<mpSettings->buttonsNb;i++)
     {
-        if(mButtons[i].gpio == gpio)
+        if(mpSettings->buttons[i].gpio == gpio)
         {
-            mButtons[i].clickTimes++;
+            mpSettings->buttons[i].clickTimes++;
 
             /* Treat just one click from 7(CLICK_DEBOUNCE) */
-            if(mButtons[i].clickTimes >= mClickSkip)
+            if(mpSettings->buttons[i].clickTimes >= mpSettings->clickSkip)
             {
                 char *pComm;
 
                 /* Get the next group of commands(in case there are more groups of commands) */
-                pComm = Events_ButGetNextCommand((button_t*)(mButtons + i));
-                print("%s\n", pComm);
+                pComm = Events_ButGetNextCommand((button_t*)(mpSettings->buttons + i));
+                printf("%s\n", pComm);
                 /* Execute commands in a group of commands */
                 Commands_Signal(pComm);
                 res = TRUE;
-                mButtons[i].clickTimes = 0;
-                mButtons[i].clickHold++;
+                mpSettings->buttons[i].clickTimes = 0;
+                mpSettings->buttons[i].clickHold++;
             }
             break;
         }
@@ -238,84 +260,83 @@ bool_t Events_ProcessEncoders()
     uint8_t i;
     bool_t res = FALSE;
 
-    for(i=0;i<mEncodersNb;i++)
+    for(i=0;i<mpSettings->encodersNb;i++)
     {
         /* Rotary Encoder */
-        {
-            mEncoders[i].dtNew = digitalRead(mEncoders[i].gpioDt);
-            mEncoders[i].clkNew = digitalRead(mEncoders[i].gpioClk);
-            mEncoders[i].valNew = grayToBinary((mEncoders[i].clkNew << 1) | mEncoders[i].dtNew);
+            mpSettings->encoders[i].dtNew = digitalRead(mpSettings->encoders[i].gpioDt);
+            mpSettings->encoders[i].clkNew = digitalRead(mpSettings->encoders[i].gpioClk);
+            mpSettings->encoders[i].valNew = grayToBinary((mpSettings->encoders[i].clkNew << 1) | mpSettings->encoders[i].dtNew);
 
             /* New values arrived */
-            if(mEncoders[i].valNew != mEncoders[i].valOld)
+            if(mpSettings->encoders[i].valNew != mpSettings->encoders[i].valOld)
             {
                 /* Update movement once in 4 changes(and not for every value change), to avoid unneeded
                  * changes */
                 /* LEFT */
-                if(mEncoders[i].valOld == 0 && mEncoders[i].valNew == 1)
+                if(mpSettings->encoders[i].valOld == 0 && mpSettings->encoders[i].valNew == 1)
                 {
-                    mEncoders[i].direction = RIGHT;
-                    mEncoders[i].changed = 1;
+                    mpSettings->encoders[i].direction = RIGHT;
+                    mpSettings->encoders[i].changed = 1;
                 }
-                else if(mEncoders[i].valOld == 1 && mEncoders[i].valNew == 2)
+                else if(mpSettings->encoders[i].valOld == 1 && mpSettings->encoders[i].valNew == 2)
                 {
-                    mEncoders[i].direction = RIGHT;
-                    mEncoders[i].changed = 1;
+                    mpSettings->encoders[i].direction = RIGHT;
+                    mpSettings->encoders[i].changed = 1;
                 }
-                else if(mEncoders[i].valOld == 2 && mEncoders[i].valNew == 3)
+                else if(mpSettings->encoders[i].valOld == 2 && mpSettings->encoders[i].valNew == 3)
                 {
-                    mEncoders[i].direction = RIGHT;
-                    mEncoders[i].changed = 1;
+                    mpSettings->encoders[i].direction = RIGHT;
+                    mpSettings->encoders[i].changed = 1;
                 }
-                else if(mEncoders[i].valOld == 3 && mEncoders[i].valNew == 0)
+                else if(mpSettings->encoders[i].valOld == 3 && mpSettings->encoders[i].valNew == 0)
                 {
-                    mEncoders[i].direction = RIGHT;
-                    mEncoders[i].changed = 1;
+                    mpSettings->encoders[i].direction = RIGHT;
+                    mpSettings->encoders[i].changed = 1;
                 }
                 /* RIGHT */
-                else if(mEncoders[i].valOld == 0 && mEncoders[i].valNew == 3)
+                else if(mpSettings->encoders[i].valOld == 0 && mpSettings->encoders[i].valNew == 3)
                 {
-                    mEncoders[i].direction = LEFT;
-                    mEncoders[i].changed = 1;
+                    mpSettings->encoders[i].direction = LEFT;
+                    mpSettings->encoders[i].changed = 1;
                 }
-                else if(mEncoders[i].valOld == 3 && mEncoders[i].valNew == 2)
+                else if(mpSettings->encoders[i].valOld == 3 && mpSettings->encoders[i].valNew == 2)
                 {
-                    mEncoders[i].direction = LEFT;
-                    mEncoders[i].changed = 1;
+                    mpSettings->encoders[i].direction = LEFT;
+                    mpSettings->encoders[i].changed = 1;
                 }
-                else if(mEncoders[i].valOld == 2 && mEncoders[i].valNew == 1)
+                else if(mpSettings->encoders[i].valOld == 2 && mpSettings->encoders[i].valNew == 1)
                 {
-                    mEncoders[i].direction = LEFT;
-                    mEncoders[i].changed = 1;
+                    mpSettings->encoders[i].direction = LEFT;
+                    mpSettings->encoders[i].changed = 1;
                 }
-                else if(mEncoders[i].valOld == 1 && mEncoders[i].valNew == 0)
+                else if(mpSettings->encoders[i].valOld == 1 && mpSettings->encoders[i].valNew == 0)
                 {
-                    mEncoders[i].direction = LEFT;
-                    mEncoders[i].changed = 1;
+                    mpSettings->encoders[i].direction = LEFT;
+                    mpSettings->encoders[i].changed = 1;
                 }
 
-                //print("direction:%d, changed:%d, old:%d, new:%d\n", mEncoders[i].direction,mEncoders[i].changed,
-                //    mEncoders[i].valOld, mEncoders[i].valNew);
+                //printf("direction:%d, changed:%d, old:%d, new:%d\n", mpSettings->encoders[i].direction,mpSettings->encoders[i].changed,
+                //    mpSettings->encoders[i].valOld, mpSettings->encoders[i].valNew);
 
                 /* Check if we have a new movement */
-                if(mEncoders[i].changed)
+                if(mpSettings->encoders[i].changed)
                 {
                     /* Treat the LEFT movement */
-                    if(mEncoders[i].direction == LEFT)
+                    if(mpSettings->encoders[i].direction == LEFT)
                     {
                         /* If we haven't reached the number of steps to be ignored just increase the
                          * current step value */
-                        if(mEncoders[i].leftSteps < mEncoders[i].skipTimesLeft)
+                        if(mpSettings->encoders[i].leftSteps < mpSettings->encoders[i].skipTimesLeft)
                         {
-                            //print("increase left step: %d\n", mEncoders[i].leftSteps);
-                            mEncoders[i].leftSteps++;
+                            //printf("increase left step: %d\n", mpSettings->encoders[i].leftSteps);
+                            mpSettings->encoders[i].leftSteps++;
                         }
                         /* If we have reached the number of steps to be skipped then reset the current
                          * step number and execute the assigned commands */
                         else
                         {
-                            mEncoders[i].leftSteps = 0; /* Reset value */
-                            Commands_Signal((char*)mEncoders[i].actionLeft);
+                            mpSettings->encoders[i].leftSteps = 0; /* Reset value */
+                            Commands_Signal((char*)mpSettings->encoders[i].actionLeft);
                             res = TRUE;
                             //usleep(mEncoderHold);
                         }
@@ -325,31 +346,30 @@ bool_t Events_ProcessEncoders()
                     {
                         /* If we haven't reached the number of steps to be ignored just increase the
                          * current step value */
-                        if(mEncoders[i].rightSteps < mEncoders[i].skipTimesRight)
+                        if(mpSettings->encoders[i].rightSteps < mpSettings->encoders[i].skipTimesRight)
                         {
-                            //print("increase right step: %d\n", mEncoders[i].rightSteps);
-                            mEncoders[i].rightSteps++;
+                            //printf("increase right step: %d\n", mpSettings->encoders[i].rightSteps);
+                            mpSettings->encoders[i].rightSteps++;
                         }
                         /* If we have reached the number of steps to be skipped then reset the current
                          * step number and execute the assigned commands */
                         else
                         {
-                            mEncoders[i].rightSteps = 0; /* Reset value */
-                            Commands_Signal((char*)mEncoders[i].actionRight);
+                            mpSettings->encoders[i].rightSteps = 0; /* Reset value */
+                            Commands_Signal((char*)mpSettings->encoders[i].actionRight);
                             res = TRUE;
                             //usleep(mEncoderHold);
                         }
                     }
 
-                    mEncoders[i].changed = 0;
+                    mpSettings->encoders[i].changed = 0;
                 }
 
                 /* Update old value */
-                mEncoders[i].valOld = mEncoders[i].valNew;
+                mpSettings->encoders[i].valOld = mpSettings->encoders[i].valNew;
 
                 break;
             }
-        }
     }
 
     return res;
@@ -379,149 +399,3 @@ static char *Events_ButGetNextCommand(button_t *pBut)
     return pRes;
 }
 
-static void Events_ReadConfig(const char *pFileName)
-{
-    FILE    *fp;
-    char    *pBuffer;
-    uint8_t i;
-    char    *pData;
-    uint8_t ipAddress[INET_ADDRSTRLEN];
-
-    memset((void*)ipAddress, 0, sizeof(ipAddress));
-    memset(mButtons, 0, sizeof(button_t) * BUTTONS_NB);
-
-    pBuffer = (char*)malloc(LINE_MAX_SIZE);
-    fp = fopen(pFileName, "r");
-
-    if(fp<0)
-    {
-        perror("file read went wrong\n");
-        print("file read went wrong\n");
-    }
-
-    while(fgets(pBuffer, LINE_MAX_SIZE, fp))
-    {
-        if(pBuffer[0] == '#' || pBuffer[0] == '\n' || pBuffer[0] == '\r')
-            continue;
-
-        /* Replace ':' with '\0'(end of string) character */
-        for(i = 0; i < LINE_MAX_SIZE; i++)
-        {
-            if(!pBuffer[i]) break;
-            if(pBuffer[i] == ':' || pBuffer[i] == '\n' || pBuffer[i] == '\r' || pBuffer[i] == '#')
-                pBuffer[i] = 0;
-        }
-
-        /* Get ip address */
-        pData = strstr(pBuffer, "[ip]");
-        if(pData)
-        {
-            pData += strlen(pData) + 1;
-            strcpy((char*)ipAddress, pData);
-            pData += strlen(pData);
-            continue;
-        }
-
-        /* Get click debounce value */
-        pData = strstr(pBuffer, "click_skip");
-        if(pData)
-        {
-            pData += strlen(pData) + 1;
-            mClickSkip = atoi(pData);
-            continue;
-        }
-
-        /* Get click hold value */
-        pData = strstr(pBuffer, "click_hold");
-        if(pData)
-        {
-            pData += strlen(pData) + 1;
-            mClickHold = atoi(pData);
-            continue;
-        }
-
-        /* Get encoder hold value */
-        pData = strstr(pBuffer, "encoder_hold");
-        if(pData)
-        {
-            pData += strlen(pData) + 1;
-            mEncoderHold = atoi(pData);
-            continue;
-        }
-
-        /* Parse button entry */
-        pData = strstr(pBuffer, "button");
-        if(pData)
-        {
-            pData += strlen(pData) + 1; /* skip 'button:' */
-            mButtons[mButtonsNb].gpio = atoi(pData); /* get pin number */
-            pinMode(mButtons[mButtonsNb].gpio, INPUT) ;
-            wiringPiISR(mButtons[mButtonsNb].gpio, INT_EDGE_FALLING,
-                aSupportedIsrHandlers[mButtons[mButtonsNb].gpio]);
-            pData += strlen(pData) + 1; /* skip 'pin number:' */
-            strcpy(mButtons[mButtonsNb].action, pData); /* get command(s) */
-
-            {
-                char *pStr;
-
-                pStr = mButtons[mButtonsNb].action;
-                mButtons[mButtonsNb].pCommands[mButtons[mButtonsNb].iCmd] = pStr;
-                while(*pStr)
-                {
-                    if(*pStr == '>')
-                    {
-                        *pStr = 0;
-                        mButtons[mButtonsNb].iCmd++;
-                        mButtons[mButtonsNb].pCommands[mButtons[mButtonsNb].iCmd] = pStr + 1;
-                    }
-
-                    /* Don't exceed available array */
-                    if(mButtons[mButtonsNb].iCmd >= MAX_COMMANDS) break;
-
-                    pStr++;
-                }
-
-                /* Set the number of commands */
-                mButtons[mButtonsNb].nbCmd = mButtons[mButtonsNb].iCmd + 1;
-            }
-
-            mButtonsNb++;
-            continue;
-        }
-
-        /* Parse rotary encoder entry */
-        pData = strstr(pBuffer, "encoder");
-        if(pData)
-        {
-            pData += strlen(pData) + 1; /* skip 'encoder:' */
-            pData += strlen(pData) + 1; /* skip 'sl:' */
-            mEncoders[mEncodersNb].skipTimesLeft = atoi(pData);
-            pData += strlen(pData) + 1; /* skip value: */
-            pData += strlen(pData) + 1; /* skip 'sr:' */
-            mEncoders[mEncodersNb].skipTimesRight = atoi(pData);
-            pData += strlen(pData) + 1; /* skip value: */
-            pData += strlen(pData) + 1; /* skip 'CLK:' */
-            mEncoders[mEncodersNb].gpioClk = atoi(pData); /* get CLK pin(11) */
-            pinMode(mEncoders[mEncodersNb].gpioClk, INPUT) ;
-            wiringPiISR(mEncoders[mEncodersNb].gpioClk, INT_EDGE_BOTH,
-                aSupportedIsrHandlers[mEncoders[mEncodersNb].gpioClk]);
-            pData += strlen(pData) + 1; /* skip value: */
-            pData += strlen(pData) + 1; /* skip DT: */
-            mEncoders[mEncodersNb].gpioDt = atoi(pData); /* get DT pin(9) */
-            pinMode(mEncoders[mEncodersNb].gpioDt, INPUT) ;
-            wiringPiISR(mEncoders[mEncodersNb].gpioDt, INT_EDGE_BOTH,
-                aSupportedIsrHandlers[mEncoders[mEncodersNb].gpioDt]);
-            pData += strlen(pData) + 1; /* skip '9' */
-            strcpy(mEncoders[mEncodersNb].actionLeft, pData); /* get left command(s) */
-            pData += strlen(pData) + 1; /* skip left command(s) */
-            strcpy(mEncoders[mEncodersNb].actionRight, pData); /* get right command(s) */
-
-            mEncodersNb++;
-            continue;
-
-        }
-    }
-
-    free(pBuffer);
-    fclose(fp);
-}

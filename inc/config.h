@@ -10,7 +10,7 @@ extern "C" {
 /*
  * Defines
  */
-#define DEBUG                   (0)
+#define DEBUG                   (TRUE)
 #define MAX_COMMANDS            (5)
 #define BUTTONS_NB              (10)
 #define ENCODERS_NB             (5)
@@ -47,9 +47,9 @@ extern "C" {
 #define SYSTEM_MODE_TOGGLE      "system_mode_toggle"
 
 #if DEBUG
-#define print(...)              printf(__VA_ARGS__)
+#define print                   printf
 #else
-#define print(...)              printf(" ")
+#define print(...)
 #endif
 
 #ifdef __cplusplus

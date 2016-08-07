@@ -34,27 +34,25 @@ void *Radio_Loop(void *pParam);
 /*
  * Local Variables
  */
-static uint8_t      mRssiLimit = 35;
+static settings_t   *mpSettings = NULL;
 static rdsData_t    mRdsData;
-
 static uint8_t      mTmpPSName[3][9];
 
 
 /*
  * Global Variables
  */
-extern uint8_t  gSystemMode; /* systemModes_t */
 
 /*
  * Public functions definitions
  */
-void Radio_Init(uint8_t volume, int frequency, uint8_t rssiLimit)
+void Radio_Init(settings_t *pSettings)
 {
     //pthread_mutex_init(&lockX, NULL);
-    print("Starting Radio Module\n");
+    printf("Starting Radio Module\n");
 
-    mRssiLimit = rssiLimit;
-    memset(&mRdsData.programServiceName, ' ', sizeof(mRdsData.programServiceName));
+    memset(&mRdsData.programServiceName, ' ',
+        sizeof(mRdsData.programServiceName));
     memset(&mRdsData.radioText, ' ', sizeof(mRdsData.radioText));
 
     memset(mTmpPSName, ' ', 3*9);
@@ -62,14 +60,20 @@ void Radio_Init(uint8_t volume, int frequency, uint8_t rssiLimit)
     mTmpPSName[1][8] = 0;
     mTmpPSName[2][8] = 0;
 
+    si_init();
+
+    /* SI4703 Setup */
+#if 0
+    si_power(PWR_ENABLE);
+    if(pSettings->systemMode != gModeRadio_c)
     {
-        /* SI4703 Setup */
-        si_power(PWR_ENABLE);
-        si_set_volume(volume);
-        si_tune(frequency);
+        si_mute(0);
     }
+    si_set_volume(pSettings->systemVolume);
+    si_tune(pSettings->radioFrequency);
 
     Radio_FrequencyUpdate(FALSE);
+#endif
 }
 
 void Radio_UnInit()
@@ -95,13 +99,15 @@ void Radio_FrequencyUpdate(bool_t resetRds)
 
     if(resetRds)
     {
-        memset(&mRdsData.programServiceName, ' ', sizeof(mRdsData.programServiceName));
+        memset(&mRdsData.programServiceName, ' ',
+            sizeof(mRdsData.programServiceName));
         memset(&mRdsData.radioText, ' ', sizeof(mRdsData.radioText));
         mRdsData.programServiceName[sizeof(mRdsData.programServiceName) - 1] = 0;
         mRdsData.radioText[sizeof(mRdsData.radioText) - 1] = 0;
 
         /* RDS Radiotext */
-        sprintf(aXbmcAction, "SetProperty(Radio.RadioText,\"%s\",10000)", mRdsData.radioText);
+        sprintf(aXbmcAction, "SetProperty(Radio.RadioText,\"%s\",10000)",
+            mRdsData.radioText);
         XBMC_ClientAction(aXbmcAction);
 
         /* RDS Program name */
@@ -114,7 +120,7 @@ void Radio_FrequencyUpdate(bool_t resetRds)
 
 void Radio_RdsUpdate()
 {
-    if(gSystemMode == gModeRadio_c)
+    if(mpSettings->systemMode == gModeRadio_c)
     {
         rdsStatus_t rdsStatus;
         char        aXbmcAction[150];
@@ -123,9 +129,10 @@ void Radio_RdsUpdate()
         if(rdsStatus.radiotext)
         {
             /* RDS Radiotext */
-            sprintf(aXbmcAction, "SetProperty(Radio.RadioText,\"%s\",10000)", mRdsData.radioText);
+            sprintf(aXbmcAction, "SetProperty(Radio.RadioText,\"%s\",10000)",
+                mRdsData.radioText);
             XBMC_ClientAction(aXbmcAction);
-            print("RT: [%s]\n", aXbmcAction);
+            printf("RT: [%s]\n", aXbmcAction);
         }
 
         if(rdsStatus.stationName)
@@ -134,8 +141,19 @@ void Radio_RdsUpdate()
             sprintf(aXbmcAction, "SetProperty(Radio.StationName,\"%s\",10000)",
                 mRdsData.programServiceName);
             XBMC_ClientAction(aXbmcAction);
-            print("SN: [%s]\n", aXbmcAction);
+            printf("SN: [%s]\n", aXbmcAction);
         }
     }
 }
 
+uint8_t Radio_Volume
+(
+    uint8_t systemVolume
+)
+{
+    uint8_t radioVol = 0;
+
+    radioVol = (uint8_t)(((float)systemVolume) / (100.0f / 15.0f));
+
+    return radioVol;
+}

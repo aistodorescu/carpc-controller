@@ -167,9 +167,10 @@ typedef struct rdsStatus_tag
     bool_t radiotext;
 } rdsStatus_t;
 
+void si_init();
 int si_read_regs();
 int si_update();
-void si_power(uint16_t mode);
+void si_power(uint16_t mode, uint8_t rst, uint8_t band, uint8_t spacing);
 void si_set_volume(int volume);
 void si_set_channel(int chan);
 void si_tune(int freq);

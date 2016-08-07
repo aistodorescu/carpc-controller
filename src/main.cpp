@@ -10,10 +10,12 @@
 #include "wiringPi.h"
 #include "xbmcclient_if.h"
 
+#include "settings.h"
 #include "events.h"
 #include "event-server.h"
 #include "commands.h"
 #include "radio.h"
+#include "si4703.h"
 
 #include "config.h"
 #include "common.h"
@@ -39,34 +41,29 @@ static void intHandler(int dmmy);
  * Local Variables
  */
 static bool_t   mForceStop = FALSE;
-
+static settings_t mSettings = {0};
 
 /*
  * Global Variables
  */
-uint8_t         gSystemMode; /* systemModes_t */
+
 
 /*
  * Public functions definitions
  */
 int main(int argc, char *argv[])
 {
-    if(argc != 2)
-    {
-        printf("Please provide the path to the configuration file\n");
-        printf("usage: %s path/to/configuration_file\n", argv[0]);
-    }
+    settings_t *pSettings = &mSettings;
 
-    if(!strcmp(argv[1], "--help"))
+    if(argc > 1 && !strcmp(argv[1], "--help"))
     {
         printf("CarPC Remote controller\n");
-        printf("usage: %s path/to/configuration_file\n\n", argv[0]);
+        printf("usage: %s\n", argv[0]);
         printf("Author: Andrei Istodorescu\n");
         printf("e-mail: andrei.istodorescu@gmail.com\n");
         printf("web: www.engineering-diy.blogspot.com\n");
         printf("forum: http://engineeringdiy.freeforums.org/\n\n");
     }
-
 
     /* Install signal handler */
     signal(SIGINT, intHandler);
@@ -75,35 +72,30 @@ int main(int argc, char *argv[])
     //wiringPiSetup();
     wiringPiSetupGpio();
 
-    /* Get configuration from the input file */
-    Events_Init(argv[1]);
-    //Events_Init("/home/pi/config/gpio_description");
-
-    /* Restore default mode */
-    gSystemMode = gModeRadio_c;
+    /* Initialize Events manager */
+    Events_Init(pSettings);
+    printf("events ok\n");
 
     /* XBMC Event Client Module */
     XBMC_ClientInit("CarPC GPIO Controller", (const char*)NULL);
-
-    /* CarPC Event Server Module */
-    EventServer_Init();
+    printf("client ok\n");
 
     /* Commands Module Interface */
-    Commands_Init();
+    Commands_Init(pSettings);
+    printf("commands ok\n");
 
-    /* Radio Module Interface */
-    Radio_Init(RADIO_START_VOL, RADIO_START_FREQ, 35);
+    /* Radio setup */
+    si_init();
 
-    /* Set XBMC mode */
-    (gSystemMode == gModeRadio_c)?XBMC_ClientAction("SetProperty(Radio.Active,true,10000)"):
-        XBMC_ClientAction("SetProperty(Radio.Active,false,10000)");
+    /* CarPC Event Server Module */
+    EventServer_Init(pSettings);
 
     /* Main loop */
     while(!mForceStop)
     {
         /* Reduce CPU usage: sleep 0.5ms */
         //usleep(500);
-    	usleep(1000000);
+        usleep(10000000);
     }
 
     return 0;
@@ -115,8 +107,9 @@ int main(int argc, char *argv[])
  */
 static void intHandler(int dmmy)
 {
-    print("Interrupt signal caught\n");
+    printf("Interrupt signal caught\n");
 
+    Settings_UnInit();
     Events_UnInit();
     XBMC_ClientUnInit();
     Commands_UnInit();

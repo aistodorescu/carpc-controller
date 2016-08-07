@@ -135,23 +135,26 @@ int si_update()
     return ret;
 }
 
-void si_power(uint16_t mode)
+void si_init()
+{
+    sem_init(&si_sem, 0, 1);
+}
+
+void si_power(uint16_t mode, uint8_t rst, uint8_t band, uint8_t spacing)
 {
     if(mode == PWR_ENABLE)
     {
-        sem_init(&si_sem, 0, 1);
-
         /* GPIO initialization using wiringPi */
         {
-            pinMode(SI4703_RESET, OUTPUT);
+            pinMode(rst, OUTPUT);
             pinMode(SI4703_SDA, OUTPUT);
 
             digitalWrite(SI4703_SDA, LOW);
-            digitalWrite(SI4703_RESET, LOW);
+            digitalWrite(rst, LOW);
 
             delay(1200);
 
-            digitalWrite(SI4703_RESET, HIGH);
+            digitalWrite(rst, HIGH);
 
             delay(1200);
 
@@ -184,8 +187,35 @@ void si_power(uint16_t mode)
         // enable RDS High-Performance Mode
         si_regs[SYSCONF3] |= RDSPRF;
         si_regs[SYSCONF1] |= DE; // set 50us De-Emphasis for Europe, skip for USA
-        // select general Europe/USA 87.5 - 108 MHz band
-        si_regs[SYSCONF2] = BAND0 | SPACE100; // 100kHz channel spacing for Europe
+
+        /* Set band */
+        if(band == 0)
+        {
+            si_regs[SYSCONF2] = BAND0;
+        }
+        else if(band == 1)
+        {
+            si_regs[SYSCONF2] = BAND1;
+        }
+        else
+        {
+            si_regs[SYSCONF2] = BAND2;
+        }
+
+        /* Set channek spacing */
+        if(spacing == 50)
+        {
+            si_regs[SYSCONF2] |= SPACE50; // 100kHz channel spacing for Europe
+        }
+        else if(spacing == 100)
+        {
+            si_regs[SYSCONF2] |= SPACE100;
+        }
+        else
+        {
+            si_regs[SYSCONF2] |= SPACE200;
+        }
+
         // apply recommended seek settings for "most stations"
         si_regs[SYSCONF2] &= ~SEEKTH;
         si_regs[SYSCONF2] |= 0x0C00; // SEEKTH 12
@@ -312,7 +342,7 @@ void si_rds_update(rdsData_t *pRdsData, rdsStatus_t *pStatus)
 
         newPS = newRT = false;
 
-        //print("%d group ready\n", gt);
+        //printf("%d group ready\n", gt);
         switch(gt)
         {
             /* Basic tuning and switching information */
@@ -354,13 +384,13 @@ void si_rds_update(rdsData_t *pRdsData, rdsStatus_t *pStatus)
                     pRdsData->programServiceName[idx * 2 + 1] = ch;
                 //mTmpPSName[miTmpPSName][idx * 2 + 1] = ch;
 
-                /* print("%d <%c%c><0x%02x,0x%02x> country code: 0x%02x, program type: %d, ref: %d, %d\n",
+                /* printf("%d <%c%c><0x%02x,0x%02x> country code: 0x%02x, program type: %d, ref: %d, %d\n",
                             idx, si_regs[RDSD] >> 8, si_regs[RDSD] & 0xFF, si_regs[RDSD] >> 8,
                             si_regs[RDSD] & 0xFF, countryCode, programType, programRefNumber,
                             (si_regs[RDSB] >> 2) & 0x01);*/
                 newPS = true;
 
-                //print("Program: [% 8s] [%s]\n", mRdsData.programServiceName, mRdsData.radioText);
+                //printf("Program: [% 8s] [%s]\n", mRdsData.programServiceName, mRdsData.radioText);
             }
             break;
             case 1:
@@ -402,7 +432,7 @@ void si_rds_update(rdsData_t *pRdsData, rdsStatus_t *pStatus)
         }
 
         {
-            /*print("%d %d %d %d\n",
+            /*printf("%d %d %d %d\n",
                         (si_regs[STATUSRSSI] & BLERA) >> 9,
                         (si_regs[READCHAN] & BLERB) >> 14,
                         (si_regs[READCHAN] & BLERC) >> 12,
